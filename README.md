@@ -11,7 +11,7 @@ Sigue estos pasos uno por uno para ejecutar el proyecto en tu entorno local.
 ### 1. Clonar el repositorio
 Copia el proyecto a tu máquina local:
 ```bash
-git clone https://github.com/Jonathancraxker/api_anteiku.git
+git clone https://github.com/Jonathancraxker/api_anteiku_fastify_tickets.git
 ```
 
 ### 2. Entrar a la carpeta del proyecto
