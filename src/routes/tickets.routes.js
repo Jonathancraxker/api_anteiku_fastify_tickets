@@ -77,6 +77,25 @@ async function ticketRoutes(fastify, options) {
         return { statusCode: 201, intOp: "SxTKS207", data: [data, { message: "Comentario añadido" }] };
     });
 
+    // Mis tickets asignados (Perfil)
+    fastify.get('/my-assigned', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+        try {
+            const data = await TicketsController.getMyAssigned(fastify, request.user.id);
+            return { statusCode: 200, intOp: "SxTKS208", data };
+        } catch (err) {
+            return reply.status(500).send({ error: err.message });
+        }
+    });
+
+    // Mis estadísticas (Perfil)
+    fastify.get('/my-stats', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+        try {
+            const data = await TicketsController.getMyStats(fastify, request.user.id);
+            return { statusCode: 200, intOp: "SxTKS209", data };
+        } catch (err) {
+            return reply.status(500).send({ error: err.message });
+        }
+    });
 
 }
 module.exports = ticketRoutes;

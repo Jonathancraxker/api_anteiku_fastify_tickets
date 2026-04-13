@@ -7,12 +7,14 @@ class TicketsController {
                 t.descripcion, 
                 t.creado_en, 
                 t.fecha_final,
+                u.id as asignado_id,
                 u_autor.nombre_completo as autor_nombre,
                 u_asig.nombre_completo as asignado_nombre,
                 e.nombre as estado,
                 e.color as estado_color,
                 p.nombre as prioridad
             FROM tickets t
+            LEFT JOIN usuarios u ON t.asignado_id = u.id
             LEFT JOIN usuarios u_autor ON t.autor_id = u_autor.id
             LEFT JOIN usuarios u_asig ON t.asignado_id = u_asig.id
             INNER JOIN estados e ON t.estado_id = e.id
@@ -27,6 +29,7 @@ class TicketsController {
     static async getGroupStats(fastify, groupId) {
         const query = `
             SELECT 
+
                 COUNT(*) as total,
                 COUNT(*) FILTER (WHERE e.nombre = 'Pendiente') as pendientes,
                 COUNT(*) FILTER (WHERE e.nombre = 'En Progreso') as en_progreso,
@@ -68,32 +71,38 @@ class TicketsController {
         return nuevoTicket;
     }
 
-    static async updateTicket(fastify, ticketId, updateData, usuarioId) {
-        const { titulo, descripcion, asignado_id, estado_id, prioridad_id, fecha_final } = updateData;
+    static async updateTicket(fastify, id, updates, usuarioId) {
+    // 1. Construimos las partes de la consulta dinámicamente
+    const fields = [];
+    const values = [];
+    let idx = 1;
+
+    for (const [key, value] of Object.entries(updates)) {
+        // Evitamos actualizar campos que no deben cambiar o que no existen
+        if (['id', 'creado_en', 'autor_id'].includes(key)) continue;
         
-        // 1. Obtenemos el estado actual antes de actualizar para el historial
-        const currentTicket = await fastify.pg.query('SELECT estado_id, asignado_id FROM tickets WHERE id = $1', [ticketId]);
-        if (currentTicket.rowCount === 0) throw new Error('Ticket no encontrado');
-
-        // 2. Ejecutamos la actualización
-        const query = `
-            UPDATE tickets 
-            SET titulo = $1, descripcion = $2, asignado_id = $3, estado_id = $4, prioridad_id = $5, fecha_final = $6
-            WHERE id = $7 RETURNING *;
-        `;
-        const values = [titulo, descripcion, asignado_id, estado_id, prioridad_id, fecha_final, ticketId];
-        const result = await fastify.pg.query(query, values);
-        const updatedTicket = result.rows[0];
-
-        // 3. Guardamos en el historial que fue una ACTUALIZACIÓN
-        // Guardamos los IDs viejos vs nuevos en el JSON de detalles
-        await this.saveHistory(fastify, ticketId, usuarioId, 'ACTUALIZACIÓN', {
-            antes: currentTicket.rows[0],
-            despues: { estado_id, asignado_id }
-        });
-
-        return updatedTicket;
+        fields.push(`${key} = $${idx}`);
+        values.push(value);
+        idx++;
     }
+
+    if (fields.length === 0) throw new Error("No hay campos para actualizar");
+
+    // 2. Añadimos el ID al final de los valores para el WHERE
+    values.push(id);
+    const query = `
+        UPDATE tickets 
+        SET ${fields.join(', ')} 
+        WHERE id = $${idx} 
+        RETURNING *;
+    `;
+
+    const result = await fastify.pg.query(query, values);
+    
+    if (result.rowCount === 0) throw new Error("Ticket no encontrado");
+    
+    return result.rows[0];
+}
 
     // borrar ticket
     static async deleteTicket(fastify, ticketId, usuarioId) {
@@ -139,7 +148,7 @@ class TicketsController {
         return result.rows;
     }
 
-// Crear un comentario
+    // Crear un comentario
     static async addComment(fastify, commentData) {
         const { ticket_id, autor_id, contenido } = commentData;
         const query = `
@@ -153,9 +162,47 @@ class TicketsController {
         await this.saveHistory(fastify, ticket_id, autor_id, 'COMENTARIO', { 
             comentario: contenido.substring(0, 30) + '...'
         });
-
         return result.rows[0];
     }
+
+
+    // Obtener los últimos 5 tickets asignados al usuario logueado
+    static async getMyAssigned(fastify, userId) {
+        const query = `
+            SELECT 
+                t.id, 
+                t.titulo, 
+                e.nombre as estado,
+                e.color as estado_color,
+                p.nombre as prioridad
+            FROM tickets t
+            INNER JOIN estados e ON t.estado_id = e.id
+            INNER JOIN prioridades p ON t.prioridad_id = p.id
+            WHERE t.asignado_id = $1
+            ORDER BY t.creado_en DESC
+            LIMIT 5
+        `;
+        const result = await fastify.pg.query(query, [userId]);
+        return result.rows;
+    }
+
+    // Obtener estadísticas simplificadas para el perfil
+    static async getMyStats(fastify, userId) {
+        const query = `
+            SELECT 
+                COUNT(*) as total,
+                COUNT(*) FILTER (WHERE e.nombre = 'Pendiente') as pendientes,
+                COUNT(*) FILTER (WHERE e.nombre = 'En Progreso') as en_progreso,
+                COUNT(*) FILTER (WHERE e.nombre = 'Hecho') as hechos,
+                COUNT(*) FILTER (WHERE e.nombre = 'Cerrado') as cerrados
+            FROM tickets t
+            INNER JOIN estados e ON t.estado_id = e.id
+            WHERE t.asignado_id = $1
+        `;
+        const result = await fastify.pg.query(query, [userId]);
+        return result.rows[0];
+    }
+
 
 }
 module.exports = TicketsController;
