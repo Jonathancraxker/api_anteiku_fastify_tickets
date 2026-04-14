@@ -97,5 +97,16 @@ async function ticketRoutes(fastify, options) {
         }
     });
 
+    // Endpoint para obtener el historial de un grupo
+    fastify.get('/group-history/:groupId', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+        const { groupId } = request.params;
+        try {
+            const data = await TicketsController.getGroupHistory(fastify, groupId);
+            return { statusCode: 200, intOp: "SxTKS210", data };
+        } catch (err) {
+            return reply.status(500).send({ error: err.message });
+        }
+    });
+
 }
 module.exports = ticketRoutes;

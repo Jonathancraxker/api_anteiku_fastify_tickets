@@ -8,6 +8,7 @@ class TicketsController {
                 t.creado_en, 
                 t.fecha_final,
                 u.id as asignado_id,
+                u_asignado.email as asignado_email,
                 u_autor.nombre_completo as autor_nombre,
                 u_asig.nombre_completo as asignado_nombre,
                 e.nombre as estado,
@@ -15,6 +16,7 @@ class TicketsController {
                 p.nombre as prioridad
             FROM tickets t
             LEFT JOIN usuarios u ON t.asignado_id = u.id
+            LEFT JOIN usuarios u_asignado ON t.asignado_id = u_asignado.id
             LEFT JOIN usuarios u_autor ON t.autor_id = u_autor.id
             LEFT JOIN usuarios u_asig ON t.asignado_id = u_asig.id
             INNER JOIN estados e ON t.estado_id = e.id
@@ -96,7 +98,11 @@ class TicketsController {
         WHERE id = $${idx} 
         RETURNING *;
     `;
-
+    //en la actualización guardamos en el historial qué campos se actualizaron y cuáles fueron sus nuevos valores (opcionalmente podríamos guardar también los valores anteriores)
+    await this.saveHistory(fastify, id, usuarioId, 'ACTUALIZACIÓN', { 
+        campos_actualizados: Object.keys(updates),
+        nuevos_valores: updates
+    });
     const result = await fastify.pg.query(query, values);
     
     if (result.rowCount === 0) throw new Error("Ticket no encontrado");
@@ -201,6 +207,30 @@ class TicketsController {
         `;
         const result = await fastify.pg.query(query, [userId]);
         return result.rows[0];
+    }
+
+// Crea una funcion para obtener todo el historil de tickets de un grupo.
+    static async getGroupHistory(fastify, groupId) {
+        const query = `
+            SELECT 
+                h.id,
+                h.ticket_id,
+                t.titulo as ticket_titulo,
+                h.usuario_id,
+                u.nombre_completo as usuario_nombre,
+                u.email as usuario_email,
+                h.accion,
+                h.detalles,
+                h.creado_en as fecha
+            FROM historial_tickets h
+            LEFT JOIN tickets t ON h.ticket_id = t.id
+            LEFT JOIN usuarios u ON h.usuario_id = u.id
+            WHERE t.grupo_id = $1
+            ORDER BY h.creado_en DESC
+        `;
+        
+        const result = await fastify.pg.query(query, [groupId]);
+        return result.rows;
     }
 
 
