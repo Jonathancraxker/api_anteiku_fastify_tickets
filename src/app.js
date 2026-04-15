@@ -11,7 +11,7 @@ fastify.register(fastifyJwt, {
 fastify.register(dbConnector);
 
 fastify.register(cors, {
-    origin: 'http://localhost:4200',
+    origin: ['http://localhost:4200', 'https://proyecto1-angular-40lkqq1s5-jonathans-projects-27d0782c.vercel.app'],
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     allowedHeaders: ['Content-Type', 'Authorization']
 });
